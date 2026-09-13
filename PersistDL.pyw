@@ -35,20 +35,12 @@ LOG_PATH = Path(__file__).with_name("persistdl_error.log")
 # Python-Code anzufassen. Bewusst KEINE komplizierte i18n-Bibliothek,
 # nur einfache Schluessel -> Text (bzw. -> Liste bei den Tabellen-
 # ueberschriften), mit "{platzhalter}".format(...) fuer eingesetzte Werte.
+# Standardsprache ist bewusst fest Englisch (keine Windows-Spracherkennung -
+# die war unzuverlaessig/ueberraschend) - wer Deutsch will, waehlt es im
+# "Sprache:"-Dropdown, das merkt sich die Wahl dauerhaft.
 LANG_DIR = Path(__file__).with_name("lang")
 LANG = {}
-
-
-def _detect_system_language():
-    """Ermittelt die Windows-UI-Sprache OHNE PyQt6 - wird auch aufgerufen,
-    falls PyQt6 selbst fehlt (siehe _fatal weiter unten)."""
-    try:
-        import ctypes
-        lcid = ctypes.windll.kernel32.GetUserDefaultUILanguage()
-        primary = lcid & 0x3FF  # untere 10 Bit = Primaersprache (LANGID)
-        return "de" if primary == 0x07 else "en"  # 0x07 = Deutsch
-    except Exception:
-        return "en"
+DEFAULT_LANGUAGE = "en"
 
 
 def load_language(code):
@@ -85,7 +77,7 @@ def TN(key_one, key_other, n, **kwargs):
     return T(key_one if n == 1 else key_other, n=n, **kwargs)
 
 
-init_language(_detect_system_language())
+init_language(DEFAULT_LANGUAGE)
 
 
 def _fatal(msg):
@@ -681,14 +673,17 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle(f"PersistDL v{VERSION}")
         self.setMinimumSize(480, 320)
-        self.resize(920, 480)   # Fallback, falls _restore_geometry() unten
-                                 # aus irgendeinem Grund nichts setzen kann
+        self.resize(1100, 480)  # Fallback, falls _restore_geometry() unten
+                                 # aus irgendeinem Grund nichts setzen kann.
+                                 # Breiter als frueher (920) - die Options-
+                                 # zeile lief bei laengeren (v.a. englischen)
+                                 # Texten sonst rechts aus dem Fenster.
         self.workers = {}   # row -> worker
         self.rows = []      # row -> dict(url, folder, filename, done)
 
         self.cfg = self._load_cfg()
         self.font_size = self.cfg.get("font_size", 10)
-        self.lang_code = self.cfg.get("language") or _detect_system_language()
+        self.lang_code = self.cfg.get("language") or DEFAULT_LANGUAGE
         init_language(self.lang_code)
 
         # Browser-Catcher (lokaler HTTP-Server) vorbereiten
@@ -722,7 +717,7 @@ class MainWindow(QMainWindow):
             # Erststart (oder kaputter Wert): Startgroesse, aber nie groesser
             # als der tatsaechlich verfuegbare Bildschirmbereich - genau das
             # hat vorher auf kleinen Monitoren ueber den Rand geragt.
-            w = max(480, min(920, avail.width() - 40))
+            w = max(480, min(1100, avail.width() - 40))
             h = max(320, min(480, avail.height() - 40))
             self.resize(w, h)
         if avail:

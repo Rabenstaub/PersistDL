@@ -68,12 +68,13 @@ Setup steps: see [`browser-extension/INSTALLATION.txt`](browser-extension/INSTAL
 
 ## Language
 
-The UI ships in German and English (`lang/de.json`, `lang/en.json`), picked
-automatically based on your Windows display language — with a dropdown in
-the app to override it. Want another language? Copy `lang/en.json` to e.g.
-`lang/fr.json`, translate the values (leave the keys as they are), and pick
-it from the dropdown — no code changes needed. The dropdown lists whatever
-`.json` files it finds in `lang/`.
+The UI ships in German and English (`lang/de.json`, `lang/en.json`).
+**English is the default**; switch to German (or any other language you add)
+via the "Language" dropdown in the app — it takes effect after restarting
+PersistDL. Want another language? Copy `lang/en.json` to e.g. `lang/fr.json`,
+translate the values (leave the keys as they are), and pick it from the
+dropdown — no code changes needed. The dropdown lists whatever `.json` files
+it finds in `lang/`.
 
 ## Configuration
 
