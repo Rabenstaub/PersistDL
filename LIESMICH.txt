@@ -247,5 +247,10 @@ NEU IN 1.8.0 - MEHRSPRACHIGKEIT (DEUTSCH/ENGLISCH)
   laesst sich z.B. Deutsch einstellen - wirkt nach dem naechsten
   Neustart von PersistDL, die Wahl wird dauerhaft gemerkt.
 - Eigene Uebersetzung ergaenzen: lang/en.json kopieren, umbenennen
-  (z. B. lang/fr.json) und nur die Werte (nicht die Schluessel links)
+  (z. B. lang/it.json) und nur die Werte (nicht die Schluessel links)
   uebersetzen - taucht danach automatisch im Dropdown auf.
+- NACHTRAG (14.09.2026): sechs weitere Sprachen ergaenzt - Spanisch,
+  Franzoesisch, Japanisch, Koreanisch, brasilianisches Portugiesisch,
+  vereinfachtes Chinesisch (lang/es, fr, ja, ko, pt-BR, zh-CN.json).
+  Alle gegengeprueft: gueltiges JSON, alle 102 Schluessel vorhanden,
+  Platzhalter wie {error}/{size} unangetastet uebernommen.
