@@ -1,0 +1,239 @@
+PersistDL v1.6.1
+================
+
+Download-Manager, der abgebrochene Downloads lückenlos fortsetzt –
+egal ob der Abbruch vor Sekunden oder vor Tagen passiert ist.
+
+
+WAS DAS TOOL MACHT
+------------------
+- Lädt Dateien per Link (URL) herunter.
+- Merkt sich bei JEDEM Abbruch (Netzfehler, Pause, Programm beendet,
+  PC neugestartet) die exakte Byte-Position.
+- Beim Fortsetzen wird per HTTP-Range-Request genau an dieser Stelle
+  weitergeladen – nichts wird doppelt geladen, nichts fehlt.
+- Bei Netzfehlern verbindet das Tool automatisch neu (einstellbar,
+  Standard: alle 10 Sekunden, unbegrenzt viele Versuche).
+- Prüft per ETag/Last-Modified, ob sich die Datei auf dem Server
+  geändert hat. Falls ja, wird sicherheitshalber neu begonnen
+  (sonst wäre die Datei kaputt).
+
+WIE ES FUNKTIONIERT
+-------------------
+Während des Downloads liegt im Zielordner eine Datei
+    <name>.part                  (die bisher geladenen Daten)
+    <name>.persistdl.json        (URL, Größe, ETag – der "Merkzettel")
+Erst wenn alles vollständig ist, wird die .part-Datei in den
+richtigen Dateinamen umbenannt und der Merkzettel gelöscht.
+
+START
+-----
+1. Start.bat doppelklicken.
+   (Beim allerersten Start werden PyQt6 und requests automatisch
+   installiert – dafür muss Python installiert sein.)
+2. Link oben einfügen (Button "Einfügen" holt ihn aus der
+   Zwischenablage) und "Download starten" klicken.
+
+BEDIENUNG
+---------
+- Pause          : ausgewählten Download anhalten (Stand bleibt erhalten)
+- Fortsetzen     : hält an der gemerkten Stelle wieder an – auch nach
+                   Programm-Neustart. Ohne Auswahl werden alle
+                   unfertigen Downloads fortgesetzt.
+- Entfernen      : Eintrag aus der Liste löschen. Die .part-Datei
+                   bleibt liegen; mit derselben URL kann später
+                   trotzdem fortgesetzt werden.
+- Rechtsklick    : Fortsetzen / Pause / URL kopieren
+- Strg+Mausrad   : Schriftgröße ändern (wird gespeichert)
+
+HINWEISE
+--------
+- Voraussetzung fürs Fortsetzen ist, dass der Server Range-Requests
+  unterstützt ("Accept-Ranges: bytes"). Fast alle Download-Server tun
+  das. Falls nicht, meldet das Tool es und lädt von vorn.
+- Unfertige Downloads erscheinen nach dem Programmstart automatisch
+  wieder in der Liste ("Unterbrochen – Fortsetzen klicken").
+- Einstellungen: %USERPROFILE%\.persistdl_settings.json
+
+FEHLERSUCHE (Neu in 1.0.1)
+--------------------------
+- Startet das Programm nicht: WICHTIG - zuerst die Datei .deps_ok
+  loeschen (falls vorhanden) und Start.bat erneut ausfuehren, damit
+  PyQt6 und requests wirklich installiert werden.
+- Debug.bat doppelklicken: startet das Tool MIT sichtbarer Konsole
+  und zeigt die genaue Fehlermeldung an.
+- Fehlt ein Paket, erscheint jetzt ein Windows-Fehlerdialog mit
+  Loesungshinweis statt eines stillen Absturzes.
+- Jeder Fehler wird zusaetzlich in persistdl_error.log neben der
+  .pyw-Datei gespeichert.
+
+NEU IN 1.0.2
+------------
+- Start.bat speichert die komplette Installationsausgabe in
+  install_log.txt. Rote/gelbe pip-Meldungen gehen nicht mehr verloren
+  und koennen in Ruhe nachgelesen werden.
+
+NEU IN 1.1.0 - STAPELVERARBEITUNG
+---------------------------------
+- Warteschlangen-Modus ("Nacheinander laden", standardmaessig AN):
+  Neue Links werden eingereiht und starten automatisch, sobald der
+  laufende Download fertig ist. Haekchen raus = alles parallel.
+- Links koennen jederzeit hinzugefuegt werden, auch waehrend ein
+  Download laeuft - sie merken sich ihren Platz in der Reihe.
+- Mehrere Links auf einmal: einfach mehrere URLs (durch Leerzeichen
+  oder Zeilenumbrueche getrennt) kopieren und mit "Einfuegen" +
+  "Download starten" als ganze Warteschlange anlegen.
+- "Fortsetzen" ohne Auswahl arbeitet unfertige Downloads jetzt
+  ebenfalls nacheinander ab (im Warteschlangen-Modus).
+
+NEU IN 1.2.0 - AUTOMATISCHES HERUNTERFAHREN
+-------------------------------------------
+- Neues Kaestchen "PC herunterfahren, wenn alle Downloads fertig
+  sind (erzwungen!)".
+- Loest NUR aus, wenn wirklich ALLE Downloads erfolgreich fertig
+  sind. Ist einer fehlgeschlagen oder wartet noch, bleibt der PC an.
+- ACHTUNG: Das Herunterfahren ist ERZWUNGEN (shutdown /s /f).
+  Alle Programme werden geschlossen, ungespeicherte Word-Dokumente
+  usw. gehen verloren - genau wie gewuenscht, aber ohne Gnade.
+- Sicherheitsnetz: 60-Sekunden-Countdown mit grossem
+  "Herunterfahren ABBRECHEN"-Knopf. Der Abbruch stoppt den bereits
+  laufenden Windows-Shutdown (shutdown /a).
+- Das Kaestchen wird bewusst NICHT gespeichert - es startet immer
+  abgehakt, damit man nicht Tage spaeter von einem vergessenen
+  Haken ueberrascht wird.
+
+NEU IN 1.3.0 - COMFYUI-KOMFORT
+------------------------------
+- Eigener Zielordner pro Download: Der beim Hinzufuegen eingestellte
+  Ordner gilt nur fuer diesen Download und wird in der neuen Spalte
+  "Ordner" angezeigt. So landen Loras, ControlNets und Checkpoints
+  direkt am richtigen Ort.
+- Ordner-Verlauf: Das Zielordner-Feld ist jetzt ein Dropdown mit den
+  letzten 15 benutzten Ordnern - einmal aufklappen statt jedes Mal
+  durchklicken.
+- Rechtsklick -> "Zielordner aendern...": aendert den Ordner eines
+  Eintrags nachtraeglich. Bereits geladene Teildaten (.part +
+  Merkzettel) ziehen automatisch mit um, die Fortsetzung bleibt
+  lueckenlos. (Laufende Downloads vorher kurz pausieren.)
+- Spalten per Drag & Drop umsortierbar; Spaltenbreite UND
+  Reihenfolge werden gespeichert und beim naechsten Start
+  wiederhergestellt.
+- BUGFIX: Dateien groesser 2 GB (z.B. safetensors-Modelle) zeigten
+  "?" als Groesse und einen unbestimmten Fortschrittsbalken
+  (32-Bit-Ueberlauf). Jetzt werden auch 10-GB-Modelle korrekt mit
+  Groesse, Prozent und Restzeit angezeigt.
+
+NEU IN 1.3.1
+------------
+- Fortschrittsanzeige komplett neu gezeichnet: grosse, fette
+  Prozentzahl. Die Schrift ist zweifarbig - dunkel auf dem hellen
+  Teil, WEISS auf dem blauen Balken - und wechselt exakt an der
+  Balkenkante die Farbe. Damit ist der Wert bei jedem Fuellstand
+  gut lesbar.
+
+NEU IN 1.4.0 - DOWNLOAD-GEDAECHTNIS
+-----------------------------------
+- Fertige Downloads bleiben dauerhaft in der Liste stehen - auch
+  ueber Programm-Neustarts hinweg - bis sie ausdruecklich entfernt
+  werden (Rechtsklick -> "Zeile vergessen" oder Button "Entfernen").
+  Die Liste ist damit gleichzeitig ein Verlauf, wo welches Modell
+  gelandet ist.
+- Rechtsklick -> "Datei im Ordner anzeigen": oeffnet den Explorer
+  und markiert die Datei direkt - praktisch, um ein Modell
+  nachtraeglich zu verschieben. Bei unfertigen Downloads wird die
+  .part-Datei markiert.
+- Beim Programmstart und beim Anzeigen wird geprueft, ob die Datei
+  noch am gemerkten Ort liegt. Wenn nicht, erscheint in ROT:
+  "Datei nicht auffindbar - verschoben?". Liegt sie wieder da,
+  wird der Status automatisch wieder normal.
+- "Entfernen"/"Vergessen" loescht nur den Listeneintrag -
+  heruntergeladene Dateien bleiben immer auf der Festplatte.
+
+NEU IN 1.4.1
+------------
+- Das Herunterfahren-Kaestchen sitzt jetzt gut sichtbar rechts in
+  der Optionszeile, direkt neben "Nacheinander laden
+  (Warteschlange)". Beschriftung: "PC nach Download herunterfahren
+  (erzwungen!)" - rot und fett.
+
+NEU IN 1.4.2
+------------
+- BUGFIX: Die grosse Prozentanzeige im Fortschrittsbalken wurde auf
+  Windows als winziger Strich dargestellt (Konflikt zwischen
+  Pixel-Schriftgroesse im Stylesheet und Punkt-Schriftgroesse beim
+  Zeichnen). Jetzt ist die Zahl immer mindestens 12 Punkt gross und
+  fett - dunkel auf hellem Grund, weiss auf dem blauen Balken.
+
+NEU IN 1.5.0 - STATUS-AMPEL UND AUFGERAEUMTE KNOEPFE
+----------------------------------------------------
+- Die Knoepfe Fortsetzen/Pause zeigen jetzt farbig den Zustand:
+  * GRUEN auf "Fortsetzen"  = mindestens ein Download laeuft
+  * ROT auf "Pause"         = unfertige Downloads, aber alles pausiert
+  * beide grau              = nichts zu tun (Liste leer/alles fertig)
+- "Entfernen" und "Ordner oeffnen" sind aus der unteren Leiste raus
+  und leben jetzt vollstaendig im Rechtsklick-Menue:
+  * "Diese Zeile entfernen"                    (eine Zeile vergessen)
+  * "Alle abgeschlossenen Downloads entfernen" (Verlauf aufraeumen)
+  * "Datei im Ordner anzeigen"                 (Explorer, Datei markiert)
+  Heruntergeladene Dateien bleiben beim Entfernen immer erhalten.
+
+NEU IN 1.5.1 - HERUNTERFAHREN-WARNUNG UNUEBERSEHBAR
+---------------------------------------------------
+- Wenn der Countdown startet, holt sich das Tool selbst aus der
+  Minimierung und bringt sich nach vorn.
+- Der Countdown-Dialog ist "immer im Vordergrund" (Always-on-top)
+  und holt sich jede Sekunde erneut nach vorn, falls sich ein
+  anderes Fenster darueberlegt.
+- Akustischer Alarm: Windows-Warnton in den ersten 10 Sekunden
+  jede Sekunde, danach alle 10 Sekunden - man hoert es also auch
+  mit dem Ruecken zum Monitor.
+- WICHTIG zu wissen: Der Windows-Shutdown-Timer laeuft UNABHAENGIG
+  vom Dialog. Nach 60 Sekunden faehrt der PC herunter, auch wenn
+  man den Dialog nie gesehen hat - das ist der Sinn der Funktion.
+  Bei exklusiven Vollbild-Spielen kann der Dialog verdeckt bleiben;
+  die Toene und die Windows-eigene Shutdown-Meldung kommen trotzdem.
+  Wer am PC weiterarbeiten/spielen will, sollte den Haken nicht
+  setzen.
+
+NEU IN 1.6.0 - FERTIG-SOUND
+---------------------------
+- Neues Kaestchen "Ton bei Fertigstellung" (standardmaessig AN):
+  bei jedem fertig geladenen Download ertoent ein Signal.
+- Glocken-Knopf daneben oeffnet ein Menue:
+  * Probehoeren
+  * Eigenen Sound waehlen (MP3/WAV) - wird sofort zur Probe abgespielt
+  * Standard-Sound verwenden (Windows-Standardton)
+- Einstellung und eigener Sound-Pfad werden gespeichert.
+- Der Sound spielt asynchron und bremst die Downloads nicht.
+
+NEU IN 1.6.1
+------------
+- Der Fertig-Sound kann jetzt auch MP3 (zusaetzlich zu WAV).
+  Wiedergabe ueber Qt Multimedia (im PyQt6-Paket enthalten),
+  mit automatischem Fallback auf Windows-Bordmittel.
+
+NEU IN 1.7.0 - BROWSER-INTERCEPTION UND CIVITAI-TOKEN
+-----------------------------------------------------
+- Neues Kaestchen "Browser-Downloads abfangen": startet einen
+  lokalen Empfaenger (127.0.0.1, Standard-Port 47800). Zusammen mit
+  der beiliegenden Chrome-Erweiterung "PersistDL Catcher" werden
+  Downloads (z. B. der Download-Knopf bei Civitai) automatisch an
+  PersistDL uebergeben, statt im Browser zu landen.
+  * Der Browser-Download wird nur abgebrochen, wenn das Tool laeuft
+    und die URL bestaetigt - laeuft das Tool nicht, laedt der Browser
+    normal selbst. Es geht also kein Download verloren.
+  * Port ist einstellbar (falls belegt). In der Erweiterung muss der
+    gleiche Port stehen.
+  * Installation der Erweiterung: siehe browser-extension/INSTALLATION.txt
+- Neues Feld "Civitai-Token": Der API-Key von civitai.com wird bei
+  civitai.com-Download-Links automatisch angehaengt (?token=... plus
+  Authorization-Header). Damit funktionieren auch login-pflichtige
+  Modelle.
+  * Kommt statt der Datei eine HTML-Login-Seite an, meldet das Tool
+    das klar ("Login/Token noetig") statt eine kaputte Datei zu
+    speichern.
+  * Token bekommst du unter: civitai.com -> Account-Einstellungen
+    -> API Keys.
+- WICHTIGER HINWEIS zum Begriff "Abfangen": Echtes Abfangen laeuft
+  ueber die Chrome-Erweiterung. Das Tool allein kann Browser-Downloads
+  technisch nicht mitbekommen - dafuer ist die Erweiterung zustaendig.

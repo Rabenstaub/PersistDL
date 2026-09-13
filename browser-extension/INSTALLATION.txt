@@ -1,0 +1,65 @@
+PersistDL Catcher – Chrome-Erweiterung
+========================================
+
+Diese Erweiterung faengt Downloads (z. B. den "Download"-Knopf bei Civitai)
+ab und uebergibt sie an dein PersistDL-Tool, statt sie im Browser zu laden.
+
+SO FUNKTIONIERT DAS ZUSAMMENSPIEL
+---------------------------------
+1. PersistDL starten (Start.bat) und oben das Kaestchen
+   "Browser-Downloads abfangen" anhaken.
+   -> Rechts erscheint gruen "lauscht auf 127.0.0.1:47800".
+2. Diese Erweiterung in Chrome installieren (siehe unten).
+3. Bei Civitai auf "Download" klicken.
+   -> Der Download landet automatisch in PersistDL, NICHT im Browser.
+
+Wichtig: Der Browser bricht seinen eigenen Download nur ab, wenn das Tool
+laeuft und antwortet. Laeuft PersistDL gerade nicht, laedt der Browser
+ganz normal selbst - es geht also nie ein Download verloren.
+
+
+ERWEITERUNG INSTALLIEREN (Chrome / Edge / Brave)
+------------------------------------------------
+1. Chrome oeffnen und in die Adresszeile eingeben:  chrome://extensions
+   (bei Edge:  edge://extensions )
+2. Oben rechts "Entwicklermodus" einschalten.
+3. Auf "Entpackte Erweiterung laden" klicken.
+4. Diesen Ordner "browser-extension" auswaehlen.
+5. Fertig - das PersistDL-Symbol erscheint in der Toolbar.
+   (Auf das Puzzle-Symbol klicken und die Erweiterung anpinnen, damit man
+    den Verbindungsstatus sieht.)
+
+
+EINSTELLUNGEN
+-------------
+Klick auf das Erweiterungs-Symbol -> "Einstellungen":
+- Port:      muss mit dem Port im Tool uebereinstimmen (Standard 47800).
+- Seiten:    welche Seiten abgefangen werden (Standard: civitai.com).
+             Mehrere durch Komma trennen, z. B.:  civitai.com, huggingface.co
+             Feld LEER = ALLE Downloads abfangen (mit Bedacht nutzen).
+- Abfangen aktiv: Haupt-Schalter der Erweiterung.
+
+Ein Klick auf das Symbol zeigt gruen/rot, ob das Tool erreichbar ist.
+
+
+CIVITAI-TOKEN (fuer login-pflichtige Modelle)
+---------------------------------------------
+Viele Civitai-Modelle brauchen einen API-Token, sonst kommt statt der Datei
+nur eine Login-Seite an. So geht's:
+1. Auf civitai.com einloggen -> Account-Einstellungen -> "API Keys"
+   -> neuen Key erstellen, kopieren.
+2. In PersistDL oben ins Feld "Civitai-Token" einfuegen.
+   Der Token wird bei civitai.com-Downloads automatisch angehaengt.
+Das Tool erkennt eine HTML-Login-Seite und weist dich darauf hin, falls
+der Token fehlt oder abgelaufen ist.
+
+
+HAEUFIGE FRAGEN
+---------------
+- "Tool nicht erreichbar": PersistDL laeuft nicht, das Kaestchen
+  "Browser-Downloads abfangen" ist nicht angehakt, oder die Ports
+  unterscheiden sich. Beide auf denselben Port stellen.
+- "Port belegt": im Tool einen anderen Port waehlen (z. B. 47801) und in
+  den Erweiterungs-Einstellungen denselben Port eintragen.
+- Es sollen NICHT alle Civitai-Klicks abgefangen werden: Erweiterung ueber
+  das Symbol kurz deaktivieren oder Haken "Abfangen aktiv" entfernen.

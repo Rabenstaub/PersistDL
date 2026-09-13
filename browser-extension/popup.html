@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<style>
+  body { font-family:"Segoe UI", system-ui, sans-serif; width:260px;
+         margin:0; padding:14px 16px; background:#eceae5; color:#2b2b33; }
+  h1 { font-size:15px; margin:0 0 10px; }
+  .dot { display:inline-block; width:10px; height:10px; border-radius:50%;
+         margin-right:6px; vertical-align:middle; background:#b6b4c6; }
+  #line { font-weight:600; margin:6px 0 12px; font-size:13px; }
+  .muted { color:#6f6d66; font-size:12px; line-height:1.4; }
+  button { width:100%; background:#5558a0; color:#fff; border:none;
+           border-radius:4px; padding:8px; font-weight:600; cursor:pointer;
+           margin-top:10px; }
+  button:hover { background:#6a6db8; }
+</style>
+</head>
+<body>
+  <h1>PersistDL Catcher</h1>
+  <div id="line"><span class="dot" id="dot"></span><span id="txt">pruefe …</span></div>
+  <div class="muted">Klicke bei Civitai auf „Download“ – der Download wird
+    automatisch an das PersistDL-Tool uebergeben, sofern es laeuft.</div>
+  <button id="opt">Einstellungen</button>
+  <script src="popup.js"></script>
+</body>
+</html>

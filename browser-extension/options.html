@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>PersistDL Catcher – Einstellungen</title>
+<style>
+  body { font-family: "Segoe UI", system-ui, sans-serif; background:#eceae5;
+         color:#2b2b33; margin:0; padding:24px; }
+  .card { max-width:520px; margin:0 auto; background:#f7f6f2;
+          border:1px solid #c9c6bd; border-radius:8px; padding:22px 24px; }
+  h1 { font-size:19px; margin:0 0 4px; }
+  p.sub { color:#6f6d66; margin:0 0 18px; font-size:13px; }
+  label { display:block; font-weight:600; margin:16px 0 4px; }
+  input[type=text], input[type=number], textarea {
+    width:100%; box-sizing:border-box; padding:8px 10px; border-radius:4px;
+    border:1px solid #c9c6bd; background:#fff; font-size:14px; }
+  textarea { min-height:56px; resize:vertical; }
+  .row { display:flex; align-items:center; gap:10px; margin-top:16px; }
+  .row input[type=checkbox] { width:18px; height:18px; }
+  small { color:#6f6d66; display:block; margin-top:4px; }
+  button { margin-top:22px; background:#5558a0; color:#fff; border:none;
+           border-radius:4px; padding:9px 18px; font-weight:600; cursor:pointer; }
+  button:hover { background:#6a6db8; }
+  #status { margin-top:14px; font-weight:600; min-height:18px; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <h1>PersistDL Catcher</h1>
+    <p class="sub">Faengt Browser-Downloads ab und uebergibt sie an das lokale PersistDL-Tool.</p>
+
+    <div class="row">
+      <input type="checkbox" id="enabled">
+      <label for="enabled" style="margin:0;">Abfangen aktiv</label>
+    </div>
+
+    <label for="port">Port (muss mit dem Tool uebereinstimmen)</label>
+    <input type="number" id="port" min="1024" max="65535" value="47800">
+
+    <label for="patterns">Nur diese Seiten abfangen</label>
+    <textarea id="patterns" placeholder="civitai.com"></textarea>
+    <small>Kommagetrennt. Ein Download wird abgefangen, wenn die Adresse
+    eines dieser Stichwoerter enthaelt. Achtung: Mirrors wie
+    <b>civitai.red</b> sind eigene Adressen und muessen hier stehen.
+    Leer lassen setzt den Standard zurueck.</small>
+
+    <button id="save">Speichern</button>
+    <div id="status"></div>
+  </div>
+  <script src="options.js"></script>
+</body>
+</html>

@@ -1,0 +1,14 @@
+# Byte-compiled / cache
+__pycache__/
+*.pyc
+
+# Local install/run state (regenerated automatically by Start.bat)
+.deps_ok
+install_log.txt
+
+# Runtime logs
+persistdl_error.log
+
+# Download sidecar/progress files (created next to downloaded files)
+*.part
+*.persistdl.json
