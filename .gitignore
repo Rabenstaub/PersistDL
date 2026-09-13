@@ -17,3 +17,4 @@ persistdl_error.log
 # the .exe itself is distributed via GitHub Releases, not committed here)
 build/
 dist/
+release_pkg/
