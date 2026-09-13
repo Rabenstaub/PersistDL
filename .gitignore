@@ -12,3 +12,8 @@ persistdl_error.log
 # Download sidecar/progress files (created next to downloaded files)
 *.part
 *.persistdl.json
+
+# PyInstaller build output (built via Build-EXE.bat / PersistDL.spec;
+# the .exe itself is distributed via GitHub Releases, not committed here)
+build/
+dist/

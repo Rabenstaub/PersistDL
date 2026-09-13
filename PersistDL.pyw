@@ -24,10 +24,21 @@ from pathlib import Path
 from urllib.parse import (urlparse, unquote, parse_qs, urlencode, urlunparse)
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
+# ---------------------------------------------------------------- App-Ordner
+# In einer per PyInstaller gebauten .exe zeigt __file__ auf einen fluechtigen
+# Temp-Entpackordner (_MEIPASS), nicht auf den Ordner, in dem die .exe
+# tatsaechlich liegt - "neben der .exe" abgelegte Dateien (Fehlerlog,
+# lang/-Ordner) wuerden sonst nach jedem Programmende verschwinden bzw. gar
+# nicht gefunden. sys.frozen ist die von PyInstaller gesetzte Kennung dafuer.
+if getattr(sys, "frozen", False):
+    APP_DIR = Path(sys.executable).parent
+else:
+    APP_DIR = Path(__file__).parent
+
 # ---------------------------------------------------------------- Crash-Log
 # pythonw hat keine Konsole – jeder Fehler beim Start wäre unsichtbar.
 # Deshalb: Fehler in Logdatei schreiben UND als Windows-Dialog anzeigen.
-LOG_PATH = Path(__file__).with_name("persistdl_error.log")
+LOG_PATH = APP_DIR / "persistdl_error.log"
 
 # ---------------------------------------------------------------- Sprache
 # Alle sichtbaren Texte liegen in lang/<code>.json - jeder kann sich eine
@@ -38,7 +49,7 @@ LOG_PATH = Path(__file__).with_name("persistdl_error.log")
 # Standardsprache ist bewusst fest Englisch (keine Windows-Spracherkennung -
 # die war unzuverlaessig/ueberraschend) - wer Deutsch will, waehlt es im
 # "Sprache:"-Dropdown, das merkt sich die Wahl dauerhaft.
-LANG_DIR = Path(__file__).with_name("lang")
+LANG_DIR = APP_DIR / "lang"
 LANG = {}
 DEFAULT_LANGUAGE = "en"
 

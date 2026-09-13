@@ -85,6 +85,14 @@ layout, ...) are stored in:
 %USERPROFILE%\.persistdl_settings.json
 ```
 
+## Building the .exe
+
+Prefer a single `PersistDL.exe` over Python + `Start.bat`? Run
+`Build-EXE.bat` — it installs PyInstaller if needed, builds via
+`PersistDL.spec`, and copies `lang/` next to the result in `dist/`.
+`lang/` ships as a real folder next to the `.exe` on purpose (not bundled
+inside it), so adding or editing a translation still needs no rebuild.
+
 ## License
 
 PersistDL is **free to download and use**, but the source stays under the
