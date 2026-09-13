@@ -10,24 +10,30 @@ cd /d "%~dp0"
 
 set SIGNTOOL="C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64\signtool.exe"
 
-if not exist PersistDL.exe (
-    echo FEHLER: PersistDL.exe liegt nicht in diesem Ordner ^(%~dp0^).
-    echo Diese .bat-Datei muss neben PersistDL.exe liegen.
+rem Exe kann direkt neben dieser .bat liegen (entpacktes ZIP) oder im
+rem dist\-Unterordner (Ergebnis von Build-EXE.bat) - beides pruefen.
+if exist PersistDL.exe (
+    set TARGET=PersistDL.exe
+) else if exist dist\PersistDL.exe (
+    set TARGET=dist\PersistDL.exe
+) else (
+    echo FEHLER: PersistDL.exe wurde weder in diesem Ordner
+    echo ^(%~dp0^) noch in dessen dist\-Unterordner gefunden.
     pause
     exit /b 1
 )
 
-echo Signiere PersistDL.exe ...
-%SIGNTOOL% sign /a /tr http://time.certum.pl /td sha256 /fd sha256 PersistDL.exe
+echo Signiere %TARGET% ...
+%SIGNTOOL% sign /a /tr http://time.certum.pl /td sha256 /fd sha256 %TARGET%
 if errorlevel 1 goto fail
 
 echo.
 echo Pruefe die Signatur ...
-%SIGNTOOL% verify /pa PersistDL.exe
+%SIGNTOOL% verify /pa %TARGET%
 if errorlevel 1 goto fail
 
 echo.
-echo FERTIG - PersistDL.exe ist signiert.
+echo FERTIG - %TARGET% ist signiert.
 pause
 exit /b 0
 
