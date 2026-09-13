@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/icon.png" width="128" height="128" alt="PersistDL logo">
+</p>
+
 # PersistDL
 
 A Windows download manager that resumes broken downloads exactly where they
