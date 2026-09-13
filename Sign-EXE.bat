@@ -24,7 +24,11 @@ if exist PersistDL.exe (
 )
 
 echo Signiere %TARGET% ...
-%SIGNTOOL% sign /a /tr http://time.certum.pl /td sha256 /fd sha256 %TARGET%
+rem WICHTIG: /n statt /a - "/a" (automatische Auswahl) hatte bei Christian
+rem faelschlich ein technisches SimplySign-internes "trust_..."-Zertifikat
+rem erwischt statt des echten Certum-Code-Signing-Zertifikats. /n waehlt
+rem gezielt ueber den Zertifikatsnamen.
+%SIGNTOOL% sign /n "Christian Diezinger" /tr http://time.certum.pl /td sha256 /fd sha256 %TARGET%
 if errorlevel 1 goto fail
 
 echo.
