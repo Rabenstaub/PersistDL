@@ -237,3 +237,16 @@ NEU IN 1.7.0 - BROWSER-INTERCEPTION UND CIVITAI-TOKEN
 - WICHTIGER HINWEIS zum Begriff "Abfangen": Echtes Abfangen laeuft
   ueber die Chrome-Erweiterung. Das Tool allein kann Browser-Downloads
   technisch nicht mitbekommen - dafuer ist die Erweiterung zustaendig.
+
+NEU IN 1.8.0 - MEHRSPRACHIGKEIT (DEUTSCH/ENGLISCH)
+---------------------------------------------------
+- Alle Oberflaechentexte liegen jetzt in externen Dateien:
+  lang/de.json und lang/en.json (einfache Schluessel -> Text-Zuordnung,
+  kein Programmier-Wissen noetig).
+- Die passende Sprache wird beim Start automatisch anhand der
+  Windows-Anzeigesprache gewaehlt; ueber ein neues Dropdown
+  ("Sprache:") laesst sie sich manuell umstellen - wirkt nach dem
+  naechsten Neustart von PersistDL.
+- Eigene Uebersetzung ergaenzen: lang/en.json kopieren, umbenennen
+  (z. B. lang/fr.json) und nur die Werte (nicht die Schluessel links)
+  uebersetzen - taucht danach automatisch im Dropdown auf.

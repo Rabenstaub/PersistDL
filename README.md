@@ -66,6 +66,15 @@ instead of your browser's download manager.
 
 Setup steps: see [`browser-extension/INSTALLATION.txt`](browser-extension/INSTALLATION.txt).
 
+## Language
+
+The UI ships in German and English (`lang/de.json`, `lang/en.json`), picked
+automatically based on your Windows display language — with a dropdown in
+the app to override it. Want another language? Copy `lang/en.json` to e.g.
+`lang/fr.json`, translate the values (leave the keys as they are), and pick
+it from the dropdown — no code changes needed. The dropdown lists whatever
+`.json` files it finds in `lang/`.
+
 ## Configuration
 
 Settings (target folder history, retry behavior, Civitai token, window

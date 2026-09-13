@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 PersistDL – Download-Manager mit lückenloser Fortsetzung
-Version 1.7.2
+Version 1.8.0
 
 Merkt sich bei jedem Abbruch (Netzfehler, Pause, Programmende) die exakte
 Byte-Position und setzt den Download später per HTTP-Range-Request fort –
@@ -29,6 +29,64 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 # Deshalb: Fehler in Logdatei schreiben UND als Windows-Dialog anzeigen.
 LOG_PATH = Path(__file__).with_name("persistdl_error.log")
 
+# ---------------------------------------------------------------- Sprache
+# Alle sichtbaren Texte liegen in lang/<code>.json - jeder kann sich eine
+# eigene Datei anlegen (z.B. lang/fr.json, Kopie von en.json), ohne den
+# Python-Code anzufassen. Bewusst KEINE komplizierte i18n-Bibliothek,
+# nur einfache Schluessel -> Text (bzw. -> Liste bei den Tabellen-
+# ueberschriften), mit "{platzhalter}".format(...) fuer eingesetzte Werte.
+LANG_DIR = Path(__file__).with_name("lang")
+LANG = {}
+
+
+def _detect_system_language():
+    """Ermittelt die Windows-UI-Sprache OHNE PyQt6 - wird auch aufgerufen,
+    falls PyQt6 selbst fehlt (siehe _fatal weiter unten)."""
+    try:
+        import ctypes
+        lcid = ctypes.windll.kernel32.GetUserDefaultUILanguage()
+        primary = lcid & 0x3FF  # untere 10 Bit = Primaersprache (LANGID)
+        return "de" if primary == 0x07 else "en"  # 0x07 = Deutsch
+    except Exception:
+        return "en"
+
+
+def load_language(code):
+    try:
+        return json.loads((LANG_DIR / f"{code}.json").read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+
+def init_language(code):
+    """Laedt die gewaehlte Sprachdatei; fehlt sie oder ist sie kaputt,
+    faellt es auf Englisch zurueck, notfalls auf den nackten Schluessel
+    (App bleibt so auch ohne lang/-Ordner benutzbar, nur unschoen)."""
+    global LANG
+    data = load_language(code)
+    if not data and code != "en":
+        data = load_language("en")
+    LANG = data
+
+
+def T(key, **kwargs):
+    text = LANG.get(key, key)
+    if isinstance(text, str) and kwargs:
+        try:
+            return text.format(**kwargs)
+        except Exception:
+            return text
+    return text
+
+
+def TN(key_one, key_other, n, **kwargs):
+    """Waehlt automatisch die Singular- oder Pluralform je nach n (in
+    beiden Sprachdateien einfach: n==1 -> _one, sonst -> _other)."""
+    return T(key_one if n == 1 else key_other, n=n, **kwargs)
+
+
+init_language(_detect_system_language())
+
 
 def _fatal(msg):
     try:
@@ -38,7 +96,7 @@ def _fatal(msg):
     try:
         import ctypes
         ctypes.windll.user32.MessageBoxW(
-            0, msg[:1500], "PersistDL – Startfehler", 0x10)
+            0, msg[:1500], T("err.start_title"), 0x10)
     except Exception:
         print(msg, file=sys.stderr)
     sys.exit(1)
@@ -55,14 +113,8 @@ try:
         QSpinBox, QMenu, QComboBox
     )
 except ImportError:
-    _fatal(
-        "Ein benötigtes Python-Paket fehlt:\n\n"
-        + traceback.format_exc()
-        + f"\n\nPython: {sys.executable}\n\n"
-        "Lösung: Eingabeaufforderung öffnen und ausführen:\n"
-        "    python -m pip install PyQt6 requests\n\n"
-        "Danach PersistDL erneut starten."
-    )
+    _fatal(T("err.missing_package", traceback=traceback.format_exc(),
+             python=sys.executable))
 
 
 def _excepthook(etype, value, tb):
@@ -72,16 +124,16 @@ def _excepthook(etype, value, tb):
     except Exception:
         pass
     try:
-        QMessageBox.critical(None, "PersistDL – Fehler",
-                             "Unerwarteter Fehler (siehe persistdl_error.log):\n\n"
-                             + msg[:1200])
+        QMessageBox.critical(None, T("err.crash_title"),
+                             T("err.crash_body", log=LOG_PATH.name,
+                               msg=msg[:1200]))
     except Exception:
         pass
 
 
 sys.excepthook = _excepthook
 
-VERSION = "1.7.2"
+VERSION = "1.8.0"
 CONFIG_PATH = Path.home() / ".persistdl_settings.json"
 _OLD_CONFIG_PATH = Path.home() / ".weiterlader_settings.json"  # Umbenennung von WeiterLader
 
@@ -280,10 +332,7 @@ class DownloadWorker(QThread):
             ctype = head.headers.get("Content-Type", "").lower()
             if is_civitai_download(self.url) and "text/html" in ctype:
                 head.close()
-                self.sig_failed.emit(
-                    "Civitai lieferte eine HTML-Seite statt der Datei – "
-                    "Login/Token nötig. Trage deinen Civitai-API-Token oben "
-                    "im Feld „Civitai-Token“ ein und starte erneut.")
+                self.sig_failed.emit(T("worker.civitai_html"))
                 return
             filename = filename_from_response(self.url, head)
             total = int(head.headers.get("Content-Length", -1))
@@ -294,8 +343,9 @@ class DownloadWorker(QThread):
         except Exception as e:
             hint = ""
             if is_civitai_download(self.url) and not self.civitai_token:
-                hint = " (Civitai braucht meist einen API-Token – Feld oben.)"
-            self.sig_failed.emit(f"Server nicht erreichbar: {e}{hint}")
+                hint = T("worker.civitai_hint")
+            self.sig_failed.emit(
+                T("worker.server_unreachable", error=e, hint=hint))
             return
 
         target = self.folder / filename
@@ -307,7 +357,7 @@ class DownloadWorker(QThread):
         if part.exists() and meta:
             if (etag and meta.get("etag") and etag != meta["etag"]) or \
                (last_mod and meta.get("last_modified") and last_mod != meta["last_modified"]):
-                self.sig_status.emit("Datei am Server geändert – Neustart")
+                self.sig_status.emit(T("worker.file_changed"))
                 part.unlink(missing_ok=True)
 
         self._save_meta(target, {
@@ -326,9 +376,10 @@ class DownloadWorker(QThread):
             if downloaded > 0 and accept_ranges:
                 headers["Range"] = f"bytes={downloaded}-"
                 mode = "ab"
-                self.sig_status.emit(f"Setze fort ab {human_size(downloaded)}")
+                self.sig_status.emit(
+                    T("worker.resuming_at", size=human_size(downloaded)))
             elif downloaded > 0 and not accept_ranges:
-                self.sig_status.emit("Server ohne Range-Support – Neustart")
+                self.sig_status.emit(T("worker.no_range_support"))
                 downloaded = 0
 
             try:
@@ -349,10 +400,11 @@ class DownloadWorker(QThread):
                         if self._pause or self._cancel:
                             resp.close()
                             if self._cancel:
-                                self.sig_status.emit("Abgebrochen")
+                                self.sig_status.emit(T("worker.cancelled"))
                             else:
-                                self.sig_status.emit(
-                                    f"Pausiert bei {human_size(part.stat().st_size)}")
+                                self.sig_status.emit(T(
+                                    "worker.paused_at",
+                                    size=human_size(part.stat().st_size)))
                             return
                         if chunk:
                             f.write(chunk)
@@ -370,22 +422,23 @@ class DownloadWorker(QThread):
                 resp.close()
 
                 if total > 0 and downloaded < total:
-                    raise IOError("Verbindung vorzeitig beendet")
+                    raise IOError(T("worker.connection_ended_early"))
                 break  # fertig
 
             except Exception as e:
                 attempt += 1
                 if not self.auto_retry or (self.max_retries and attempt > self.max_retries):
-                    self.sig_failed.emit(
-                        f"Fehler: {e} – Stand gespeichert bei "
-                        f"{human_size(part.stat().st_size if part.exists() else 0)}")
+                    self.sig_failed.emit(T(
+                        "worker.error_saved_at", error=e,
+                        size=human_size(
+                            part.stat().st_size if part.exists() else 0)))
                     return
                 for s in range(self.retry_wait, 0, -1):
                     if self._pause or self._cancel:
                         return
-                    self.sig_status.emit(
-                        f"Fehler ({e.__class__.__name__}) – neuer Versuch in {s}s "
-                        f"(Versuch {attempt})")
+                    self.sig_status.emit(T(
+                        "worker.retry_in", error_type=e.__class__.__name__,
+                        seconds=s, attempt=attempt))
                     time.sleep(1)
 
         if self._cancel:
@@ -402,7 +455,7 @@ class DownloadWorker(QThread):
             part.rename(target)
             self._meta_path(self.folder / filename).unlink(missing_ok=True)
         except Exception as e:
-            self.sig_failed.emit(f"Konnte Datei nicht finalisieren: {e}")
+            self.sig_failed.emit(T("worker.finalize_failed", error=e))
             return
 
         self.sig_done.emit(str(target))
@@ -445,7 +498,7 @@ class BigTextProgressBar(QProgressBar):
 
         # Text bestimmen
         if indeterminate:
-            text = "lädt …"
+            text = T("progress.indeterminate")
         else:
             fmt = self.format()
             if "%p" in fmt:
@@ -488,11 +541,11 @@ class ShutdownDialog(QMessageBox):
     def __init__(self, seconds=60, parent=None):
         super().__init__(parent)
         self.setIcon(QMessageBox.Icon.Warning)
-        self.setWindowTitle("PersistDL – Herunterfahren")
+        self.setWindowTitle(T("shutdown.title"))
         # Immer ueber allen Fenstern bleiben
         self.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint, True)
         self.abort_btn = self.addButton(
-            "Herunterfahren ABBRECHEN", QMessageBox.ButtonRole.RejectRole)
+            T("shutdown.abort_button"), QMessageBox.ButtonRole.RejectRole)
         self.seconds = seconds
         self._tick()
         self.timer = QTimer(self)
@@ -507,10 +560,7 @@ class ShutdownDialog(QMessageBox):
             QApplication.beep()
 
     def _tick(self):
-        self.setText(
-            "Alle Downloads sind fertig.\n\n"
-            f"Der PC wird in {self.seconds} Sekunden ERZWUNGEN "
-            "heruntergefahren.\nUngespeicherte Dokumente gehen verloren!")
+        self.setText(T("shutdown.countdown_text", seconds=self.seconds))
         # Piepton: erste 10 Sekunden jede Sekunde, danach alle 10 Sekunden
         if self.seconds > 50 or self.seconds % 10 == 0:
             self._alert_sound()
@@ -580,7 +630,7 @@ def make_catch_handler(bridge):
                 bridge.sig_url.emit(url)
                 self._json(200, {"ok": True})
             else:
-                self._json(400, {"ok": False, "error": "keine gültige URL"})
+                self._json(400, {"ok": False, "error": T("catcher.invalid_url")})
 
         def log_message(self, *args):
             pass  # keine Konsolenausgabe (pythonw hat keine Konsole)
@@ -638,6 +688,8 @@ class MainWindow(QMainWindow):
 
         self.cfg = self._load_cfg()
         self.font_size = self.cfg.get("font_size", 10)
+        self.lang_code = self.cfg.get("language") or _detect_system_language()
+        init_language(self.lang_code)
 
         # Browser-Catcher (lokaler HTTP-Server) vorbereiten
         self._catch_bridge = CatcherBridge()
@@ -737,21 +789,18 @@ class MainWindow(QMainWindow):
         # Zeile 1: URL
         row1 = QHBoxLayout()
         self.url_edit = QLineEdit()
-        self.url_edit.setPlaceholderText("Download-Link (URL) hier einfügen …")
+        self.url_edit.setPlaceholderText(T("ui.url_placeholder"))
         self.url_edit.returnPressed.connect(self.add_download)
-        btn_paste = QPushButton("Einfügen")
+        btn_paste = QPushButton(T("ui.btn_paste"))
         btn_paste.setObjectName("secondary")
         btn_paste.clicked.connect(
             lambda: self.url_edit.setText(
                 " ".join(QApplication.clipboard().text().split())))
-        btn_add = QPushButton("Download starten")
+        btn_add = QPushButton(T("ui.btn_add"))
         btn_add.clicked.connect(self.add_download)
-        btn_list = QPushButton("Liste laden …")
+        btn_list = QPushButton(T("ui.btn_import_list"))
         btn_list.setObjectName("secondary")
-        btn_list.setToolTip(
-            "Textdatei mit mehreren Downloads auf einmal einreihen.\n"
-            "Eine Zeile pro Download:  URL | Zielordner | Dateiname (optional)\n"
-            "Zeilen mit # am Anfang und leere Zeilen werden übersprungen.")
+        btn_list.setToolTip(T("ui.btn_import_list_tooltip"))
         btn_list.clicked.connect(self.import_list)
         row1.addWidget(self.url_edit, 1)
         row1.addWidget(btn_paste)
@@ -761,7 +810,7 @@ class MainWindow(QMainWindow):
 
         # Zeile 2: Zielordner (mit Verlauf) + Optionen
         row2 = QHBoxLayout()
-        row2.addWidget(QLabel("Zielordner:"))
+        row2.addWidget(QLabel(T("ui.label_target_folder")))
         self.folder_combo = QComboBox()
         self.folder_combo.setEditable(True)
         self.folder_combo.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
@@ -775,28 +824,22 @@ class MainWindow(QMainWindow):
         btn_folder.setObjectName("secondary")
         btn_folder.setFixedWidth(36)
         btn_folder.clicked.connect(self.pick_folder)
-        self.chk_retry = QCheckBox("Bei Fehler automatisch neu verbinden, alle")
+        self.chk_retry = QCheckBox(T("ui.chk_auto_retry"))
         self.chk_retry.setChecked(self.cfg.get("auto_retry", True))
         self.spin_wait = QSpinBox()
         self.spin_wait.setRange(3, 300)
-        self.spin_wait.setSuffix(" s")
+        self.spin_wait.setSuffix(T("ui.spin_seconds_suffix"))
         self.spin_wait.setValue(self.cfg.get("retry_wait", 10))
-        self.chk_queue = QCheckBox("Nacheinander laden (Warteschlange)")
+        self.chk_queue = QCheckBox(T("ui.chk_queue_mode"))
         self.chk_queue.setChecked(self.cfg.get("queue_mode", True))
         self.chk_queue.toggled.connect(lambda _: (self._save_cfg(),
                                                   self._advance_queue()))
         # Bewusst NICHT persistiert – muss pro Sitzung neu angehakt werden.
-        self.chk_shutdown = QCheckBox(
-            "PC nach Download herunterfahren (erzwungen!)")
+        self.chk_shutdown = QCheckBox(T("ui.chk_shutdown"))
         self.chk_shutdown.setStyleSheet(
             "QCheckBox { color: #a33; font-weight: 600; }"
             "QCheckBox::indicator { width: 16px; height: 16px; }")
-        self.chk_shutdown.setToolTip(
-            "Erzwungenes Herunterfahren (shutdown /s /f):\n"
-            "ALLE Programme werden geschlossen – auch ungespeicherte\n"
-            "Word-Dokumente gehen verloren!\n"
-            "Vor dem Herunterfahren läuft ein 60-Sekunden-Countdown\n"
-            "mit Abbrechen-Knopf.")
+        self.chk_shutdown.setToolTip(T("ui.chk_shutdown_tooltip"))
         row2.addWidget(self.folder_combo, 1)
         row2.addWidget(btn_folder)
         row2.addSpacing(16)
@@ -805,13 +848,13 @@ class MainWindow(QMainWindow):
         row2.addSpacing(16)
         row2.addWidget(self.chk_queue)
         row2.addSpacing(16)
-        self.chk_sound = QCheckBox("Ton bei Fertigstellung")
+        self.chk_sound = QCheckBox(T("ui.chk_sound"))
         self.chk_sound.setChecked(self.cfg.get("sound_enabled", True))
         self.chk_sound.toggled.connect(lambda _: self._save_cfg())
         btn_sound = QPushButton("🔔")
         btn_sound.setObjectName("secondary")
         btn_sound.setFixedWidth(36)
-        btn_sound.setToolTip("Fertig-Sound einstellen")
+        btn_sound.setToolTip(T("ui.btn_sound_tooltip"))
         btn_sound.clicked.connect(self._sound_menu)
         self._btn_sound = btn_sound
         row2.addWidget(self.chk_sound)
@@ -822,40 +865,51 @@ class MainWindow(QMainWindow):
 
         # Zeile 2b: Browser-Interception + Civitai-Token
         row2b = QHBoxLayout()
-        self.chk_catch = QCheckBox("Browser-Downloads abfangen")
-        self.chk_catch.setToolTip(
-            "Startet einen lokalen Empfänger. Die Chrome-Erweiterung "
-            "„PersistDL Catcher“ fängt Downloads (z. B. von Civitai) ab\n"
-            "und übergibt sie hierher, statt sie im Browser zu laden.")
+        self.chk_catch = QCheckBox(T("ui.chk_catch"))
+        self.chk_catch.setToolTip(T("ui.chk_catch_tooltip"))
         self.chk_catch.toggled.connect(self._toggle_catch)
         row2b.addWidget(self.chk_catch)
-        row2b.addWidget(QLabel("Port:"))
+        row2b.addWidget(QLabel(T("ui.label_port")))
         self.spin_port = QSpinBox()
         self.spin_port.setRange(1024, 65535)
         self.spin_port.setValue(self.cfg.get("catch_port", DEFAULT_CATCH_PORT))
         self.spin_port.valueChanged.connect(self._on_port_changed)
         row2b.addWidget(self.spin_port)
-        self.lbl_catch = QLabel("aus")
+        self.lbl_catch = QLabel(T("ui.catch_off"))
         self.lbl_catch.setObjectName("hint")
         row2b.addWidget(self.lbl_catch)
         row2b.addSpacing(24)
-        row2b.addWidget(QLabel("Civitai-Token:"))
+        row2b.addWidget(QLabel(T("ui.label_civitai_token")))
         self.token_edit = QLineEdit()
         self.token_edit.setEchoMode(QLineEdit.EchoMode.Password)
-        self.token_edit.setPlaceholderText("API-Key von civitai.com (optional)")
+        self.token_edit.setPlaceholderText(T("ui.civitai_token_placeholder"))
         self.token_edit.setText(self.cfg.get("civitai_token", ""))
-        self.token_edit.setToolTip(
-            "Civitai → Account-Einstellungen → API Keys → neuen Key erstellen.\n"
-            "Wird bei civitai.com-Download-Links automatisch angehängt.")
+        self.token_edit.setToolTip(T("ui.civitai_token_tooltip"))
         self.token_edit.editingFinished.connect(self._save_token)
         row2b.addWidget(self.token_edit, 1)
         root.addLayout(row2b)
 
+        # Zeile 2c: Sprache (wirkt nach Neustart; jede *.json in lang/
+        # taucht hier automatisch auf - eigene Uebersetzungen brauchen
+        # keinen Code-Eingriff)
+        row2c = QHBoxLayout()
+        row2c.addWidget(QLabel(T("ui.label_language")))
+        self.lang_combo = QComboBox()
+        for code, name in self._scan_languages():
+            self.lang_combo.addItem(name, code)
+        idx = self.lang_combo.findData(self.lang_code)
+        self.lang_combo.setCurrentIndex(idx if idx >= 0 else 0)
+        self.lang_combo.currentIndexChanged.connect(self._on_language_changed)
+        row2c.addWidget(self.lang_combo)
+        lang_hint = QLabel(T("ui.language_restart_hint"))
+        lang_hint.setObjectName("hint")
+        row2c.addWidget(lang_hint)
+        row2c.addStretch(1)
+        root.addLayout(row2c)
+
         # Tabelle
         self.table = QTableWidget(0, 8)
-        self.table.setHorizontalHeaderLabels(
-            ["Datei", "Ordner", "Größe", "Fortschritt",
-             "Tempo", "Restzeit", "Status", ""])
+        self.table.setHorizontalHeaderLabels(T("table.headers"))
         self.table.setAlternatingRowColors(True)
         self.table.verticalHeader().setVisible(False)
         self.table.setSelectionBehavior(self.table.SelectionBehavior.SelectRows)
@@ -895,23 +949,15 @@ class MainWindow(QMainWindow):
         # Buttons unten (Farbe zeigt den Zustand: gruen = laeuft,
         # rot = alles pausiert)
         row3 = QHBoxLayout()
-        self.btn_resume = QPushButton("Fortsetzen")
+        self.btn_resume = QPushButton(T("ui.btn_resume"))
         self.btn_resume.clicked.connect(self.resume_selected)
-        self.btn_pause = QPushButton("Pause")
+        self.btn_pause = QPushButton(T("ui.btn_pause"))
         self.btn_pause.clicked.connect(self.pause_selected)
-        self.btn_clear_list = QPushButton("Liste leeren")
+        self.btn_clear_list = QPushButton(T("ui.btn_clear_list"))
         self.btn_clear_list.setObjectName("secondary")
-        self.btn_clear_list.setToolTip(
-            "Entfernt ALLE Einträge aus der Liste (fertige und laufende).\n"
-            "Laufende Downloads werden dabei abgebrochen. Bereits "
-            "heruntergeladene Dateien\n"
-            "bleiben auf der Festplatte erhalten - es wird nur die Liste "
-            "geleert.")
+        self.btn_clear_list.setToolTip(T("ui.btn_clear_list_tooltip"))
         self.btn_clear_list.clicked.connect(self.clear_list)
-        hint = QLabel("Entfernen und Datei-Anzeige: Rechtsklick auf einen "
-                      "Eintrag. Pausierte/abgebrochene Downloads setzen "
-                      "exakt an der gemerkten Byte-Position fort – auch "
-                      "nach Programm-Neustart.")
+        hint = QLabel(T("ui.hint_bottom"))
         hint.setObjectName("hint")
         hint.setWordWrap(True)
         row3.addWidget(self.btn_resume)
@@ -923,6 +969,28 @@ class MainWindow(QMainWindow):
         self._state_timer = QTimer(self)
         self._state_timer.timeout.connect(self._update_state_buttons)
         self._state_timer.start(700)
+
+    # ---------- Sprache
+    def _scan_languages(self):
+        """Findet alle lang/*.json - eine selbst hinzugefuegte Uebersetzung
+        taucht damit automatisch in der Auswahl auf."""
+        files = sorted(LANG_DIR.glob("*.json")) if LANG_DIR.is_dir() else []
+        result = []
+        for f in files:
+            try:
+                data = json.loads(f.read_text(encoding="utf-8"))
+                name = data.get("_meta", {}).get("name", f.stem)
+            except Exception:
+                name = f.stem
+            result.append((f.stem, name))
+        return result or [("en", "English")]
+
+    def _on_language_changed(self, _idx):
+        code = self.lang_combo.currentData()
+        if code and code != self.lang_code:
+            self.lang_code = code
+            self.cfg["language"] = code
+            self._save_cfg()
 
     @staticmethod
     def _paint_btn(btn, state):
@@ -952,14 +1020,14 @@ class MainWindow(QMainWindow):
         menu = QMenu(self)
         cur = self.cfg.get("sound_path", "")
         info = QAction(
-            "Aktuell: " + (os.path.basename(cur) if cur
-                           else "Standard Windows-Sound"), self)
+            T("sound.current_prefix") + (os.path.basename(cur) if cur
+                           else T("sound.default_windows")), self)
         info.setEnabled(False)
-        a_test = QAction("Probehören", self)
+        a_test = QAction(T("sound.test"), self)
         a_test.triggered.connect(lambda: self.play_success_sound(force=True))
-        a_choose = QAction("Eigenen Sound wählen (MP3/WAV) …", self)
+        a_choose = QAction(T("sound.choose_custom"), self)
         a_choose.triggered.connect(self.choose_sound)
-        a_reset = QAction("Standard-Sound verwenden", self)
+        a_reset = QAction(T("sound.reset_default"), self)
         a_reset.triggered.connect(self.reset_sound)
         menu.addAction(info)
         menu.addSeparator()
@@ -971,8 +1039,8 @@ class MainWindow(QMainWindow):
 
     def choose_sound(self):
         path, _ = QFileDialog.getOpenFileName(
-            self, "Sound-Datei auswählen", "",
-            "Audio-Dateien (*.mp3 *.wav);;Alle Dateien (*.*)")
+            self, T("dialog.choose_sound_title"), "",
+            T("dialog.audio_filter"))
         if path:
             self.cfg["sound_path"] = path
             self._save_cfg()
@@ -1068,19 +1136,17 @@ class MainWindow(QMainWindow):
                 self.chk_catch.blockSignals(True)
                 self.chk_catch.setChecked(False)
                 self.chk_catch.blockSignals(False)
-                self.lbl_catch.setText("Port belegt")
+                self.lbl_catch.setText(T("catch.port_busy"))
                 QMessageBox.warning(
                     self, "PersistDL",
-                    f"Port {port} ist belegt oder gesperrt:\n{e}\n\n"
-                    "Bitte einen anderen Port wählen (und in der "
-                    "Chrome-Erweiterung denselben Port eintragen).")
+                    T("catch.port_busy_body", port=port, error=e))
                 self._save_cfg()
                 return
-            self.lbl_catch.setText(f"● lauscht auf 127.0.0.1:{port}")
+            self.lbl_catch.setText(T("ui.catch_listening", port=port))
             self.lbl_catch.setStyleSheet("color:#3f8f4a; font-weight:600;")
         else:
             self._catch_server.stop()
-            self.lbl_catch.setText("aus")
+            self.lbl_catch.setText(T("ui.catch_off"))
             self.lbl_catch.setStyleSheet("")
         self._save_cfg()
 
@@ -1104,7 +1170,7 @@ class MainWindow(QMainWindow):
             pass
         self._remember_folder(folder)
         row = self._add_row(url, folder)
-        self._set(row, self.COL_STATUS, "🡒 Vom Browser abgefangen")
+        self._set(row, self.COL_STATUS, T("row.intercepted"))
         self._start_or_queue(row)
         self._save_cfg()
         # Fenster kurz nach vorn holen, damit man den neuen Eintrag sieht
@@ -1121,11 +1187,11 @@ class MainWindow(QMainWindow):
                 bar = self.table.cellWidget(row, self.COL_PROGRESS)
                 bar.setMaximum(1000)
                 bar.setValue(1000)
-                bar.setFormat("100 %")
+                bar.setFormat(T("progress.done_100"))
                 self._check_file(row)
             else:
                 self._set(row, self.COL_STATUS,
-                          "Unterbrochen – „Fortsetzen“ klicken")
+                          T("row.interrupted_click_resume"))
 
     def _row_file_path(self, row):
         """Wahrscheinlichster Ablageort der Datei dieses Eintrags."""
@@ -1143,10 +1209,10 @@ class MainWindow(QMainWindow):
             return False
         path = self._row_file_path(row)
         if self.rows[row].get("filename") and path.is_file():
-            item.setText("✔ Fertig")
+            item.setText(T("row.done"))
             item.setForeground(QColor(TEXT))
             return True
-        item.setText("⚠ Datei nicht auffindbar – verschoben?")
+        item.setText(T("row.file_missing"))
         item.setForeground(QColor("#b3261e"))
         return False
 
@@ -1182,7 +1248,7 @@ class MainWindow(QMainWindow):
         else:
             QMessageBox.warning(
                 self, "PersistDL",
-                "Weder Datei noch Ordner sind auffindbar:\n" + str(path))
+                T("dialog.neither_file_nor_folder", path=path))
 
     def _add_row(self, url, folder, filename=""):
         row = self.table.rowCount()
@@ -1191,7 +1257,7 @@ class MainWindow(QMainWindow):
         for col, text in ((self.COL_NAME, unquote(name)),
                           (self.COL_FOLDER, folder), (self.COL_SIZE, "?"),
                           (self.COL_SPEED, "–"), (self.COL_ETA, "–"),
-                          (self.COL_STATUS, "Wartet")):
+                          (self.COL_STATUS, T("row.waiting"))):
             item = QTableWidgetItem(text)
             if col == self.COL_FOLDER:
                 item.setToolTip(folder)
@@ -1202,7 +1268,7 @@ class MainWindow(QMainWindow):
         btn_open = QPushButton("📂")
         btn_open.setObjectName("secondary")
         btn_open.setFixedWidth(32)
-        btn_open.setToolTip("Ablageort öffnen")
+        btn_open.setToolTip(T("ui.btn_open_folder_tooltip"))
         btn_open.clicked.connect(
             lambda _checked, b=btn_open: self.open_row_location(
                 self._row_of_widget(b, self.COL_OPEN)))
@@ -1234,8 +1300,7 @@ class MainWindow(QMainWindow):
         urls = [t for t in re.split(r"\s+", text)
                 if t.lower().startswith(("http://", "https://"))]
         if not urls:
-            QMessageBox.warning(self, "PersistDL",
-                                "Bitte eine gültige http/https-URL angeben.")
+            QMessageBox.warning(self, "PersistDL", T("dialog.invalid_url"))
             return
         folder = self.folder_edit.text().strip()
         Path(folder).mkdir(parents=True, exist_ok=True)
@@ -1253,15 +1318,15 @@ class MainWindow(QMainWindow):
         als beim normalen Mehrfach-Einfuegen oben (das nutzt fuer alle
         eingefuegten Links denselben Zielordner)."""
         path, _ = QFileDialog.getOpenFileName(
-            self, "Download-Liste laden", "",
-            "Textdateien (*.txt);;Alle Dateien (*)")
+            self, T("dialog.import_list_title"), "",
+            T("dialog.txt_filter"))
         if not path:
             return
         try:
             raw = Path(path).read_text(encoding="utf-8-sig")
         except Exception as e:
             QMessageBox.warning(self, "PersistDL",
-                                f"Konnte die Datei nicht lesen:\n{e}")
+                                T("dialog.cant_read_file", error=e))
             return
 
         added, skipped, bad_lines = 0, 0, []
@@ -1275,13 +1340,15 @@ class MainWindow(QMainWindow):
             filename = parts[2] if len(parts) >= 3 else ""
             if not url.lower().startswith(("http://", "https://")) or not folder:
                 skipped += 1
-                bad_lines.append(f"Zeile {lineno}: {line[:70]}")
+                bad_lines.append(T("import.bad_line", lineno=lineno,
+                                    line=line[:70]))
                 continue
             try:
                 Path(folder).mkdir(parents=True, exist_ok=True)
             except Exception as e:
                 skipped += 1
-                bad_lines.append(f"Zeile {lineno}: Ordner nicht anlegbar ({e})")
+                bad_lines.append(T("import.folder_error", lineno=lineno,
+                                    error=e))
                 continue
             self._remember_folder(folder)
             row = self._add_row(url, folder, filename)
@@ -1291,13 +1358,15 @@ class MainWindow(QMainWindow):
         if added:
             self._save_cfg()
 
-        msg = f"{added} Download(s) eingereiht."
+        msg = TN("import.summary_added_one", "import.summary_added_other",
+                 added)
         if skipped:
-            msg += (f"\n{skipped} Zeile(n) übersprungen (ungültige URL oder "
-                     f"kein Zielordner):\n" + "\n".join(bad_lines[:10]))
+            msg += TN("import.summary_skipped_one",
+                      "import.summary_skipped_other", skipped,
+                      lines="\n".join(bad_lines[:10]))
             if len(bad_lines) > 10:
-                msg += f"\n… und {len(bad_lines) - 10} weitere."
-        QMessageBox.information(self, "PersistDL – Liste geladen", msg)
+                msg += T("import.summary_more", count=len(bad_lines) - 10)
+        QMessageBox.information(self, T("dialog.import_done_title"), msg)
 
     def _remember_folder(self, folder):
         """Ordner-Verlauf pflegen: zuletzt benutzt nach oben, max. 15."""
@@ -1322,7 +1391,7 @@ class MainWindow(QMainWindow):
         ist und bereits ein Download läuft."""
         if self.chk_queue.isChecked() and self._any_running():
             self.rows[row]["queued"] = True
-            self._set(row, self.COL_STATUS, "⏳ In Warteschlange")
+            self._set(row, self.COL_STATUS, T("row.queued"))
         else:
             self._start(row)
 
@@ -1350,7 +1419,7 @@ class MainWindow(QMainWindow):
         w.sig_done.connect(lambda path, w=w: self._on_done(w, path))
         w.sig_failed.connect(lambda msg, w=w: self._on_failed(w, msg))
         self.workers[row] = w
-        self._set(row, self.COL_STATUS, "Verbinde …")
+        self._set(row, self.COL_STATUS, T("row.connecting"))
         w.start()
 
     def _row_for_worker(self, w):
@@ -1391,13 +1460,13 @@ class MainWindow(QMainWindow):
         if total > 0:
             bar.setMaximum(1000)
             bar.setValue(int(downloaded / total * 1000))
-            bar.setFormat(f"{downloaded / total * 100:.1f} %")
+            bar.setFormat(T("progress.percent", value=downloaded / total * 100))
         else:
             bar.setMaximum(0)  # unbestimmt
         self._set(row, self.COL_SPEED, human_speed(speed))
         self._set(row, self.COL_ETA, human_eta(eta))
         self._set(row, self.COL_STATUS,
-                  f"Lädt … {human_size(downloaded)}")
+                  T("row.downloading", size=human_size(downloaded)))
 
     def _on_done(self, w, path):
         row = self._row_for_worker(w)
@@ -1408,10 +1477,10 @@ class MainWindow(QMainWindow):
             return
         bar.setMaximum(1000)
         bar.setValue(1000)
-        bar.setFormat("100 %")
+        bar.setFormat(T("progress.done_100"))
         self._set(row, self.COL_SPEED, "–")
         self._set(row, self.COL_ETA, "–")
-        self._set(row, self.COL_STATUS, "✔ Fertig")
+        self._set(row, self.COL_STATUS, T("row.done"))
         self.rows[row]["done"] = True
         self.rows[row]["final_path"] = path
         self.play_success_sound()
@@ -1439,12 +1508,11 @@ class MainWindow(QMainWindow):
         try:
             subprocess.run(
                 ["shutdown", "/s", "/f", "/t", "60",
-                 "/c", "PersistDL: Alle Downloads fertig - PC wird "
-                       "heruntergefahren."],
+                 "/c", T("shutdown.notice_cmd")],
                 creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
         except Exception as e:
             QMessageBox.critical(self, "PersistDL",
-                                 f"shutdown-Befehl fehlgeschlagen: {e}")
+                                 T("shutdown.cmd_failed", error=e))
             return
 
         # Fenster aus der Minimierung holen und nach vorn bringen,
@@ -1460,10 +1528,10 @@ class MainWindow(QMainWindow):
                                creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
                 self.chk_shutdown.setChecked(False)
                 QMessageBox.information(
-                    self, "PersistDL", "Herunterfahren abgebrochen.")
+                    self, "PersistDL", T("shutdown.aborted"))
             except Exception as e:
                 QMessageBox.critical(self, "PersistDL",
-                                     f"Abbruch fehlgeschlagen: {e}")
+                                     T("shutdown.abort_failed", error=e))
 
     def _on_failed(self, w, msg):
         row = self._row_for_worker(w)
@@ -1510,9 +1578,8 @@ class MainWindow(QMainWindow):
             return
         ask = QMessageBox.question(
             self, "PersistDL",
-            f"{len(rows)} Eintrag/Einträge aus der Liste entfernen?\n"
-            "(Heruntergeladene Dateien und .part-Teildateien bleiben "
-            "auf der Festplatte erhalten.)")
+            TN("confirm.remove_selected_one", "confirm.remove_selected_other",
+               len(rows)))
         if ask != QMessageBox.StandardButton.Yes:
             return
         self._remove_rows(rows)
@@ -1521,14 +1588,11 @@ class MainWindow(QMainWindow):
         rows = [i for i, r in enumerate(self.rows) if r.get("done")]
         if not rows:
             QMessageBox.information(
-                self, "PersistDL",
-                "Es sind keine abgeschlossenen Downloads in der Liste.")
+                self, "PersistDL", T("info.no_done_downloads"))
             return
         ask = QMessageBox.question(
             self, "PersistDL",
-            f"Alle {len(rows)} abgeschlossenen Downloads aus der Liste "
-            "entfernen?\n(Die heruntergeladenen Dateien bleiben auf der "
-            "Festplatte erhalten.)")
+            T("confirm.remove_done", count=len(rows)))
         if ask != QMessageBox.StandardButton.Yes:
             return
         self._remove_rows(rows)
@@ -1542,14 +1606,11 @@ class MainWindow(QMainWindow):
         rows = list(range(len(self.rows)))
         if not rows:
             QMessageBox.information(
-                self, "PersistDL", "Die Liste ist bereits leer.")
+                self, "PersistDL", T("info.list_already_empty"))
             return
         ask = QMessageBox.question(
             self, "PersistDL",
-            f"Alle {len(rows)} Einträge aus der Liste entfernen?\n"
-            "Laufende Downloads werden dabei abgebrochen.\n"
-            "(Bereits heruntergeladene Dateien und .part-Teildateien "
-            "bleiben auf der Festplatte erhalten.)")
+            T("confirm.clear_list", count=len(rows)))
         if ask != QMessageBox.StandardButton.Yes:
             return
         self._remove_rows(rows)
@@ -1563,7 +1624,7 @@ class MainWindow(QMainWindow):
 
     def pick_folder(self):
         d = QFileDialog.getExistingDirectory(
-            self, "Zielordner wählen", self.folder_edit.text())
+            self, T("dialog.pick_folder_title"), self.folder_edit.text())
         if d:
             self.folder_edit.setText(d)
             self._save_cfg()
@@ -1575,12 +1636,11 @@ class MainWindow(QMainWindow):
         w = self.workers.get(row)
         if w and w.isRunning():
             QMessageBox.information(
-                self, "PersistDL",
-                "Bitte den Download zuerst pausieren, dann den "
-                "Zielordner ändern.")
+                self, "PersistDL", T("info.pause_before_folder_change"))
             return
         old = self.rows[row]["folder"]
-        d = QFileDialog.getExistingDirectory(self, "Neuer Zielordner", old)
+        d = QFileDialog.getExistingDirectory(
+            self, T("dialog.new_folder_title"), old)
         if not d or d == old:
             return
         fn = self.rows[row].get("filename", "")
@@ -1592,7 +1652,7 @@ class MainWindow(QMainWindow):
                         shutil.move(str(src), str(Path(d) / src.name))
         except Exception as e:
             QMessageBox.critical(self, "PersistDL",
-                                 f"Verschieben fehlgeschlagen: {e}")
+                                 T("error.move_failed", error=e))
             return
         self.rows[row]["folder"] = d
         self._set(row, self.COL_FOLDER, d)
@@ -1607,23 +1667,22 @@ class MainWindow(QMainWindow):
         if row < 0:
             return
         menu = QMenu(self)
-        a_resume = QAction("Fortsetzen", self)
+        a_resume = QAction(T("ui.btn_resume"), self)
         a_resume.triggered.connect(lambda: self._start(row))
-        a_pause = QAction("Pause", self)
+        a_pause = QAction(T("ui.btn_pause"), self)
         a_pause.triggered.connect(
             lambda: self.workers.get(row) and self.workers[row].pause())
-        a_copy = QAction("URL kopieren", self)
+        a_copy = QAction(T("menu.copy_url"), self)
         a_copy.triggered.connect(
             lambda: QApplication.clipboard().setText(self.rows[row]["url"]))
-        a_folder = QAction("Zielordner ändern …", self)
+        a_folder = QAction(T("menu.change_folder"), self)
         a_folder.triggered.connect(lambda: self.change_row_folder(row))
-        a_show = QAction("Datei im Ordner anzeigen", self)
+        a_show = QAction(T("menu.show_in_folder"), self)
         a_show.triggered.connect(lambda: self.open_row_location(row))
-        a_forget = QAction("Diese Zeile entfernen", self)
+        a_forget = QAction(T("menu.remove_row"), self)
         a_forget.triggered.connect(
             lambda: (self.table.selectRow(row), self.remove_selected()))
-        a_clear_done = QAction("Alle abgeschlossenen Downloads entfernen",
-                               self)
+        a_clear_done = QAction(T("menu.remove_done"), self)
         a_clear_done.triggered.connect(self.remove_done)
         menu.addAction(a_resume)
         menu.addAction(a_pause)
